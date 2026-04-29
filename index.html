@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MiKiosco</title>
+<title>Kiosco Amuyen</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -219,7 +219,7 @@ canvas.tall{height:220px !important;}
 </div>
 
 <nav>
-  <div class="logo">🏪 Mi<span>Kiosco</span></div>
+  <div class="logo"> Kiosco<span>Amuyen</span></div>
   <div class="nav-tabs">
     <button class="tab-btn active" onclick="goTab('dashboard',this)">Resumen</button>
     <button class="tab-btn" onclick="goTab('ventas',this)">Ventas</button>
@@ -250,14 +250,14 @@ canvas.tall{height:220px !important;}
   <div class="fcard">
     <div class="fcard-title">🛒 Registrar venta</div>
     <div class="fg c3">
-      <div class="fgroup"><label>Producto</label><input id="v-prod" placeholder="Ej: Coca Cola 500ml"></div>
+      <div class="fgroup"><label>Producto</label><input id="v-prod" placeholder="Ej: Saladix"></div>
       <div class="fgroup"><label>Cantidad</label><input type="number" id="v-cant" value="1" min="1"></div>
       <div class="fgroup"><label>Precio unitario ($)</label><input type="number" id="v-precio" placeholder="0.00" step="0.01"></div>
       <div class="fgroup"><label>Categoría</label>
-        <select id="v-cat"><option>Bebidas</option><option>Snacks</option><option>Cigarrillos</option><option>Golosinas</option><option>Lácteos</option><option>Limpieza</option><option>Otro</option></select>
+        <select id="v-cat"><option>Bebidas</option><option>Snacks</option><option>Insumos</option><option>Golosinas</option><option>Limpieza</option><option>Otro</option></select>
       </div>
       <div class="fgroup"><label>Pago</label>
-        <select id="v-pago"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option></select>
+        <select id="v-pago"><option>Efectivo</option><option>Transferencia</option></select>
       </div>
       <div class="fgroup"><label>Nota</label><input id="v-nota" placeholder="Opcional..."></div>
     </div>
@@ -275,10 +275,10 @@ canvas.tall{height:220px !important;}
       <div class="fgroup"><label>Descripción</label><input id="g-desc" placeholder="Ej: Compra de mercadería"></div>
       <div class="fgroup"><label>Monto ($)</label><input type="number" id="g-monto" placeholder="0.00" step="0.01"></div>
       <div class="fgroup"><label>Categoría</label>
-        <select id="g-cat"><option>Mercadería</option><option>Servicios</option><option>Alquiler</option><option>Transporte</option><option>Mantenimiento</option><option>Otro</option></select>
+        <select id="g-cat"><option>Mercadería</option><option>Servicios</option><option>Padel</option><option>Coop</option><option>Mantenimiento</option><option>Otro</option></select>
       </div>
       <div class="fgroup"><label>Pago</label>
-        <select id="g-pago"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option></select>
+        <select id="g-pago"><option>Efectivo</option><option>Transferencia</option></select>
       </div>
       <div class="fgroup full"><label>Nota</label><input id="g-nota" placeholder="Proveedor, factura..."></div>
     </div>
@@ -299,7 +299,7 @@ canvas.tall{height:220px !important;}
       <div class="fgroup"><label>Precio costo ($)</label><input type="number" id="i-costo" placeholder="0.00" step="0.01"></div>
       <div class="fgroup"><label>Precio venta ($)</label><input type="number" id="i-venta" placeholder="0.00" step="0.01"></div>
       <div class="fgroup"><label>Categoría</label>
-        <select id="i-cat"><option>Bebidas</option><option>Snacks</option><option>Cigarrillos</option><option>Golosinas</option><option>Lácteos</option><option>Limpieza</option><option>Otro</option></select>
+        <select id="i-cat"><option>Bebidas</option><option>Snacks</option><option>Insumos</option><option>Golosinas</option><option>Limpieza</option><option>Otro</option></select>
       </div>
     </div>
     <div class="btn-row"><button class="btn btn-p" onclick="addProducto()">+ Guardar producto</button></div>
@@ -350,7 +350,7 @@ canvas.tall{height:220px !important;}
   <div class="fcard">
     <div class="fcard-title">💰 Saldo inicial de caja</div>
     <div class="fg c2">
-      <div class="fgroup"><label>Monto inicial ($)</label><input type="number" id="caja-ini" placeholder="Ej: 5000" step="0.01"></div>
+      <div class="fgroup"><label>Monto inicial ($)</label><input type="number" id="caja-ini" placeholder="Ej: 10,000" step="0.01"></div>
     </div>
     <div class="btn-row"><button class="btn btn-p" onclick="setSaldoIni()">Guardar</button></div>
   </div>
