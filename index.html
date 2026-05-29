@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kiosco Amuyen</title>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -363,79 +364,73 @@ canvas.tall{height:220px !important;}
 </main>
 
 <script>
-// ======= STORAGE SYNC =======
-const STORAGE_KEY = 'kiosco_shared_';
-let kioscoId = localStorage.getItem('kiosco_id') || 'kiosco-' + Math.random().toString(36).slice(2,8);
+// ======= SUPABASE CONFIG =======
+const SUPABASE_URL = 'https://aspppodjsprzczhwfvjn.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzcHBwb2Rqc3ByemN6aHdmdmpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMTY0NjIsImV4cCI6MjA5MzU5MjQ2Mn0.-h-VAJ0Usgd3MlHhKi3eM3vMZMbJwXOKak9xs8MothY';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// kioscoId: solo para pruebas, no filtra datos en Supabase
+let kioscoId = localStorage.getItem('kiosco_id') || 'principal';
 localStorage.setItem('kiosco_id', kioscoId);
 document.getElementById('sync-id-input').value = kioscoId;
 
 let db = { ventas:[], gastos:[], inventario:[], saldoInicial:0 };
-let syncTimer = null;
-let lastSyncTime = null;
 
 function setSyncStatus(state, msg) {
-  const dot = document.getElementById('sync-dot');
-  const lbl = document.getElementById('sync-label');
-  dot.className = 'dot ' + state;
-  lbl.textContent = msg;
+  document.getElementById('sync-dot').className = 'dot ' + state;
+  document.getElementById('sync-label').textContent = msg;
 }
 
-async function loadFromStorage() {
+function hideOverlay() {
+  document.getElementById('loading-overlay').style.display = 'none';
+}
+
+async function cargarDatos() {
   setSyncStatus('syncing', 'Cargando...');
   try {
-    const res = await window.storage.get(STORAGE_KEY + kioscoId, true);
-    if (res && res.value) {
-      const parsed = JSON.parse(res.value);
-      db = { ventas:[], gastos:[], inventario:[], saldoInicial:0, ...parsed };
-    }
-    lastSyncTime = new Date();
-    setSyncStatus('ok', 'Sincronizado · ' + lastSyncTime.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}));
+    const [r1, r2, r3, r4] = await Promise.all([
+      sb.from('kiosco_ventas').select('*').order('fecha', { ascending: false }),
+      sb.from('kiosco_gastos').select('*').order('fecha', { ascending: false }),
+      sb.from('kiosco_inventario').select('*').order('nombre'),
+      sb.from('kiosco_caja').select('*').eq('id', 1).maybeSingle()
+    ]);
+    if (r1.error) throw r1.error;
+    if (r2.error) throw r2.error;
+    if (r3.error) throw r3.error;
+    db.ventas     = r1.data || [];
+    db.gastos     = r2.data || [];
+    db.inventario = r3.data || [];
+    db.saldoInicial = r4.data ? r4.data.saldo_inicial : 0;
+    const hora = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+    setSyncStatus('ok', 'Sincronizado · ' + hora);
   } catch(e) {
-    setSyncStatus('err', 'Sin conexión (datos locales)');
-    const local = localStorage.getItem('kiosco_local_' + kioscoId);
-    if (local) db = JSON.parse(local);
+    setSyncStatus('err', 'Error: ' + e.message);
   }
-  document.getElementById('loading-overlay').style.display = 'none';
+  hideOverlay();
   renderAll();
 }
 
-async function saveToStorage() {
-  setSyncStatus('syncing', 'Guardando...');
-  const payload = JSON.stringify(db);
-  localStorage.setItem('kiosco_local_' + kioscoId, payload);
-  try {
-    await window.storage.set(STORAGE_KEY + kioscoId, payload, true);
-    lastSyncTime = new Date();
-    setSyncStatus('ok', 'Sincronizado · ' + lastSyncTime.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}));
-  } catch(e) {
-    setSyncStatus('err', 'Error al guardar (guardado local)');
-  }
-}
-
-function scheduleSave() {
-  clearTimeout(syncTimer);
-  syncTimer = setTimeout(saveToStorage, 800);
-}
+// loadFromStorage = alias para compatibilidad
+const loadFromStorage = cargarDatos;
 
 function cambiarKiosco() {
   const val = document.getElementById('sync-id-input').value.trim();
   if (!val) return;
-  kioscoId = val.replace(/[^a-z0-9\-_]/gi,'').toLowerCase();
-  document.getElementById('sync-id-input').value = kioscoId;
+  kioscoId = val;
   localStorage.setItem('kiosco_id', kioscoId);
-  document.getElementById('loading-overlay').style.display = 'flex';
-  loadFromStorage();
+  // solo visual, no filtra en Supabase
+  setSyncStatus('ok', 'ID: ' + kioscoId);
 }
 
-function forzarSync() { loadFromStorage(); }
+function forzarSync() { cargarDatos(); }
 
-// Auto-sync every 30s
-setInterval(() => { loadFromStorage(); }, 30000);
+// Auto-sync cada 30s
+setInterval(cargarDatos, 30000);
 
 // ======= UTILS =======
 const fmt = n => '$' + parseFloat(n||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const todayISO = () => new Date().toISOString().slice(0,10);
-const isToday = tx => tx.date && tx.date.startsWith(todayISO());
+const isToday = tx => (tx.fecha||tx.date||'').startsWith(todayISO());
 const nowTime = () => new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
 function getDateKey(iso) { return iso ? iso.slice(0,10) : ''; }
 
@@ -450,7 +445,7 @@ function goTab(id, btn) {
 }
 
 // ======= VENTAS =======
-function regVenta() {
+async function regVenta() {
   const prod = document.getElementById('v-prod').value.trim();
   const cant = parseFloat(document.getElementById('v-cant').value)||1;
   const precio = parseFloat(document.getElementById('v-precio').value)||0;
@@ -458,10 +453,19 @@ function regVenta() {
   const pago = document.getElementById('v-pago').value;
   const nota = document.getElementById('v-nota').value.trim();
   if (!prod||precio<=0) { alert('Completá producto y precio.'); return; }
-  db.ventas.unshift({ id:Date.now(), type:'venta', producto:prod, cantidad:cant, precio, total:cant*precio, categoria:cat, pago, nota, date:new Date().toISOString(), time:nowTime() });
+  setSyncStatus('syncing', 'Guardando...');
+  const { data, error } = await sb.from('kiosco_ventas').insert({
+    producto: prod, cantidad: cant, precio, total: cant*precio, categoria: cat, pago, nota
+  }).select().single();
+  if (error) { setSyncStatus('err', 'Error: ' + error.message); return; }
+  db.ventas.unshift(data);
   const inv = db.inventario.find(i=>i.nombre.toLowerCase()===prod.toLowerCase());
-  if (inv) inv.stock = Math.max(0, inv.stock - cant);
-  scheduleSave();
+  if (inv) {
+    const ns = Math.max(0, inv.stock - cant);
+    await sb.from('kiosco_inventario').update({ stock: ns }).eq('id', inv.id);
+    inv.stock = ns;
+  }
+  setSyncStatus('ok', 'Guardado · ' + new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}));
   document.getElementById('v-prod').value='';
   document.getElementById('v-cant').value='1';
   document.getElementById('v-precio').value='';
@@ -477,22 +481,27 @@ function renderVentas() {
   el.innerHTML = hoy.map(v=>`<div class="txi">
     <div class="txi-icon v">🛒</div>
     <div class="txi-info"><div class="txi-desc">${v.producto} × ${v.cantidad}</div><div class="txi-cat">${v.categoria} · ${v.pago}</div></div>
-    <div class="txi-time">${v.time}</div>
+    <div class="txi-time">${v.fecha ? new Date(v.fecha).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : v.time||''}</div>
     <div class="txi-amt v">${fmt(v.total)}</div>
     <button class="btn btn-d" onclick="delTx('ventas',${v.id})">✕</button>
   </div>`).join('');
 }
 
 // ======= GASTOS =======
-function regGasto() {
+async function regGasto() {
   const desc = document.getElementById('g-desc').value.trim();
   const monto = parseFloat(document.getElementById('g-monto').value)||0;
   const cat = document.getElementById('g-cat').value;
   const pago = document.getElementById('g-pago').value;
   const nota = document.getElementById('g-nota').value.trim();
   if (!desc||monto<=0) { alert('Completá descripción y monto.'); return; }
-  db.gastos.unshift({ id:Date.now(), type:'gasto', desc, monto, categoria:cat, pago, nota, date:new Date().toISOString(), time:nowTime() });
-  scheduleSave();
+  setSyncStatus('syncing', 'Guardando...');
+  const { data, error } = await sb.from('kiosco_gastos').insert({
+    descripcion: desc, monto, categoria: cat, pago, nota
+  }).select().single();
+  if (error) { setSyncStatus('err', 'Error: ' + error.message); return; }
+  db.gastos.unshift(data);
+  setSyncStatus('ok', 'Guardado · ' + new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}));
   document.getElementById('g-desc').value='';
   document.getElementById('g-monto').value='';
   document.getElementById('g-nota').value='';
@@ -506,26 +515,34 @@ function renderGastos() {
   if (!hoy.length) { el.innerHTML='<div class="empty"><div class="e">💸</div>Sin gastos hoy</div>'; return; }
   el.innerHTML = hoy.map(g=>`<div class="txi">
     <div class="txi-icon g">💸</div>
-    <div class="txi-info"><div class="txi-desc">${g.desc}</div><div class="txi-cat">${g.categoria} · ${g.pago}</div></div>
-    <div class="txi-time">${g.time}</div>
+    <div class="txi-info"><div class="txi-desc">${g.descripcion||g.desc||''}</div><div class="txi-cat">${g.categoria} · ${g.pago}</div></div>
+    <div class="txi-time">${g.fecha ? new Date(g.fecha).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : g.time||''}</div>
     <div class="txi-amt g">−${fmt(g.monto)}</div>
     <button class="btn btn-d" onclick="delTx('gastos',${g.id})">✕</button>
   </div>`).join('');
 }
 
 // ======= INVENTARIO =======
-function addProducto() {
+async function addProducto() {
   const nombre = document.getElementById('i-nom').value.trim();
   const stock = parseFloat(document.getElementById('i-stock').value)||0;
-  const min = parseFloat(document.getElementById('i-min').value)||5;
+  const minimo = parseFloat(document.getElementById('i-min').value)||5;
   const costo = parseFloat(document.getElementById('i-costo').value)||0;
-  const venta = parseFloat(document.getElementById('i-venta').value)||0;
-  const cat = document.getElementById('i-cat').value;
+  const precio_venta = parseFloat(document.getElementById('i-venta').value)||0;
+  const categoria = document.getElementById('i-cat').value;
   if (!nombre) { alert('Ingresá el nombre.'); return; }
+  setSyncStatus('syncing', 'Guardando...');
   const ex = db.inventario.find(i=>i.nombre.toLowerCase()===nombre.toLowerCase());
-  if (ex) { ex.stock+=stock; ex.min=min; if(costo) ex.costo=costo; if(venta) ex.venta=venta; }
-  else db.inventario.push({ id:Date.now(), nombre, stock, min, costo, venta, categoria:cat });
-  scheduleSave();
+  if (ex) {
+    const ns = ex.stock + stock;
+    await sb.from('kiosco_inventario').update({ stock:ns, minimo, costo:costo||ex.costo, precio_venta:precio_venta||ex.precio_venta }).eq('id', ex.id);
+    ex.stock=ns; ex.minimo=minimo; if(costo) ex.costo=costo; if(precio_venta) ex.precio_venta=precio_venta;
+  } else {
+    const { data, error } = await sb.from('kiosco_inventario').insert({ nombre, stock, minimo, costo, precio_venta, categoria }).select().single();
+    if (error) { setSyncStatus('err', 'Error: '+error.message); return; }
+    db.inventario.push(data);
+  }
+  setSyncStatus('ok', 'Guardado · ' + new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}));
   ['i-nom','i-stock','i-costo','i-venta'].forEach(id=>document.getElementById(id).value='');
   renderInventario();
 }
@@ -538,8 +555,8 @@ function renderInventario() {
   if (!inv.length) { body.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
   body.innerHTML = inv.map(p=>{
-    const margen = p.venta&&p.costo ? (((p.venta-p.costo)/p.venta)*100).toFixed(0)+'%' : '—';
-    const sc = p.stock===0?'so':p.stock<=p.min?'sl':'sk';
+    const pv = p.precio_venta||p.venta||0; const margen = pv&&p.costo ? (((pv-p.costo)/pv)*100).toFixed(0)+'%' : '—';
+    const sc = p.stock===0?'so':p.stock<=(p.minimo||p.min||5)?'sl':'sk';
     return `<tr><td><strong>${p.nombre}</strong></td><td style="color:var(--muted2)">${p.categoria}</td>
       <td class="${sc}">${p.stock}</td><td>${p.costo?fmt(p.costo):'—'}</td>
       <td>${p.venta?fmt(p.venta):'—'}</td><td style="color:var(--accent)">${margen}</td>
@@ -547,10 +564,11 @@ function renderInventario() {
   }).join('');
 }
 
-function delProducto(id) {
+async function delProducto(id) {
   if (!confirm('¿Eliminar?')) return;
+  await sb.from('kiosco_inventario').delete().eq('id', id);
   db.inventario = db.inventario.filter(i=>i.id!==id);
-  scheduleSave(); renderInventario();
+  renderInventario();
 }
 
 // ======= DASHBOARD =======
@@ -577,24 +595,26 @@ function renderDashboard() {
     <div class="txi-icon ${tx._t}">${tx._t==='v'?'🛒':'💸'}</div>
     <div class="txi-info"><div class="txi-desc">${tx._t==='v'?tx.producto:(tx.descripcion||tx.desc||'')}</div><div class="txi-cat">${tx.categoria} · ${tx.pago}</div></div>
     <div class="txi-time">${tx.time}</div>
-    <div class="txi-amt ${tx._t}">${tx._t==='v'?'+':'−'}${fmt(tx._t==='v'?tx.total:(tx.monto||0))}</div>
+    <div class="txi-amt ${tx._t}">${tx._t==='v'?'+':'−'}${fmt(tx._t==='v'?tx.total:tx.monto)}</div>
   </div>`).join('');
 }
 
 // ======= DELETE =======
-function delTx(tipo, id) {
+async function delTx(tipo, id) {
   if (!confirm('¿Eliminar?')) return;
+  const tabla = tipo==='ventas' ? 'kiosco_ventas' : 'kiosco_gastos';
+  await sb.from(tabla).delete().eq('id', id);
   db[tipo] = db[tipo].filter(t=>t.id!==id);
-  scheduleSave();
   tipo==='ventas' ? renderVentas() : renderGastos();
   renderDashboard();
 }
 
 // ======= CAJA =======
-function setSaldoIni() {
+async function setSaldoIni() {
   const v = parseFloat(document.getElementById('caja-ini').value)||0;
+  await sb.from('kiosco_caja').upsert({ id: 1, saldo_inicial: v });
   db.saldoInicial = v;
-  scheduleSave(); renderCaja();
+  renderCaja();
   document.getElementById('caja-ini').value='';
 }
 
@@ -608,8 +628,8 @@ function renderCaja() {
   const efeV = vH.filter(v=>v.pago==='Efectivo').reduce((a,v)=>a+v.total,0);
   const efeG = gH.filter(g=>g.pago==='Efectivo').reduce((a,g)=>a+g.monto,0);
   const caja = (db.saldoInicial||0)+efeV-efeG;
-  const vMes = db.ventas.filter(v=>(v.fecha||v.date||'').startsWith(mesKey)).reduce((a,v)=>a+v.total,0);
-  const gMes = db.gastos.filter(g=>(g.fecha||g.date||'').startsWith(mesKey)).reduce((a,g)=>a+g.monto,0);
+  const vMes = db.ventas.filter(v=>v.date&&v.date.startsWith(mesKey)).reduce((a,v)=>a+v.total,0);
+  const gMes = db.gastos.filter(g=>g.date&&g.date.startsWith(mesKey)).reduce((a,g)=>a+g.monto,0);
   document.getElementById('c-bal').textContent=fmt(bal);
   document.getElementById('c-bal').style.color=bal>=0?'var(--green)':'var(--red)';
   document.getElementById('c-efe').textContent=fmt(caja);
@@ -617,7 +637,7 @@ function renderCaja() {
   document.getElementById('c-gmes').textContent=fmt(gMes);
   // bar chart gastos por categoria mes
   const cats = {};
-  db.gastos.filter(g=>(g.fecha||g.date||'').startsWith(mesKey)).forEach(g=>{ cats[g.categoria]=(cats[g.categoria]||0)+g.monto; });
+  db.gastos.filter(g=>g.date&&g.date.startsWith(mesKey)).forEach(g=>{ cats[g.categoria]=(cats[g.categoria]||0)+g.monto; });
   const maxG = Math.max(...Object.values(cats),1);
   const colors = ['var(--red)','var(--accent)','var(--blue)','var(--purple)','var(--green)','var(--accent2)'];
   let ci=0;
@@ -677,8 +697,8 @@ function formatWeekLabel(d) {
 
 function renderGraficos() {
   const { start, end } = getDateRange(currentPeriod);
-  const ventas = db.ventas.filter(v=>{ const d=new Date(v.fecha||v.date); return d>=start&&d<=end; });
-  const gastos = db.gastos.filter(g=>{ const d=new Date(g.fecha||g.date); return d>=start&&d<=end; });
+  const ventas = db.ventas.filter(v=>{ const d=new Date(v.date); return d>=start&&d<=end; });
+  const gastos = db.gastos.filter(g=>{ const d=new Date(g.date); return d>=start&&d<=end; });
 
   // Decide granularity
   let labels=[], vData=[], gData=[];
@@ -688,24 +708,24 @@ function renderGraficos() {
       const dt = new Date(d+'T12:00:00');
       return dt.toLocaleDateString('es-AR',{weekday:'short',day:'numeric'});
     });
-    vData = days.map(d => ventas.filter(v=>getDateKey(v.fecha||v.date)===d).reduce((a,v)=>a+v.total,0));
-    gData = days.map(d => gastos.filter(g=>getDateKey(g.fecha||g.date)===d).reduce((a,g)=>a+g.monto,0));
+    vData = days.map(d => ventas.filter(v=>getDateKey(v.date)===d).reduce((a,v)=>a+v.total,0));
+    gData = days.map(d => gastos.filter(g=>getDateKey(g.date)===d).reduce((a,g)=>a+g.monto,0));
   } else if (currentPeriod==='mes') {
     const days = getDaysInRange(start, end);
     labels = days.map(d => new Date(d+'T12:00:00').getDate()+'');
-    vData = days.map(d => ventas.filter(v=>getDateKey(v.fecha||v.date)===d).reduce((a,v)=>a+v.total,0));
-    gData = days.map(d => gastos.filter(g=>getDateKey(g.fecha||g.date)===d).reduce((a,g)=>a+g.monto,0));
+    vData = days.map(d => ventas.filter(v=>getDateKey(v.date)===d).reduce((a,v)=>a+v.total,0));
+    gData = days.map(d => gastos.filter(g=>getDateKey(g.date)===d).reduce((a,g)=>a+g.monto,0));
   } else {
     // group by week
     const weeks = getWeeksInRange(start, end);
     labels = weeks.map(w=>w.label);
     vData = weeks.map(w=>{
       const ws = new Date(w.key+'T00:00:00'), we = new Date(ws); we.setDate(ws.getDate()+6); we.setHours(23,59,59);
-      return ventas.filter(v=>{ const d=new Date(v.fecha||v.date); return d>=ws&&d<=we; }).reduce((a,v)=>a+v.total,0);
+      return ventas.filter(v=>{ const d=new Date(v.date); return d>=ws&&d<=we; }).reduce((a,v)=>a+v.total,0);
     });
     gData = weeks.map(w=>{
       const ws = new Date(w.key+'T00:00:00'), we = new Date(ws); we.setDate(ws.getDate()+6); we.setHours(23,59,59);
-      return gastos.filter(g=>{ const d=new Date(g.fecha||g.date); return d>=ws&&d<=we; }).reduce((a,g)=>a+g.monto,0);
+      return gastos.filter(g=>{ const d=new Date(g.date); return d>=ws&&d<=we; }).reduce((a,g)=>a+g.monto,0);
     });
   }
 
@@ -874,8 +894,9 @@ function renderAll() {
 
 // ======= INIT =======
 document.getElementById('nav-date').textContent = new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
-loadFromStorage();
+cargarDatos();
 </script>
 </body>
 </html>
+
 
